@@ -1,0 +1,87 @@
+<div class="task-container">
+  <!-- Formulário para criar nova tarefa -->
+  <div class="card task-form">
+    <h2 class="form-title">Nova Tarefa</h2>
+    <form (ngSubmit)="createTask()" class="form-row">
+      <input
+        type="text"
+        class="form-input"
+        [(ngModel)]="newTaskTitle"
+        name="newTaskTitle"
+        placeholder="Digite o título da tarefa..."
+        minlength="3"
+        maxlength="255"
+        required
+      />
+      <button type="submit" class="btn btn-primary" [disabled]="!newTaskTitle.trim()">
+        ➕ Adicionar
+      </button>
+    </form>
+  </div>
+
+  <!-- Mensagem de erro -->
+  <div *ngIf="error" class="error-message">
+    <span>⚠️ {{ error }}</span>
+    <button class="btn btn-sm btn-secondary" (click)="error = null">✕</button>
+  </div>
+
+  <!-- Estatísticas -->
+  <div class="stats-row">
+    <div class="stat-card">
+      <span class="stat-number">{{ tasks.length }}</span>
+      <span class="stat-label">Total</span>
+    </div>
+    <div class="stat-card stat-pending">
+      <span class="stat-number">{{ pendingTasks }}</span>
+      <span class="stat-label">Pendentes</span>
+    </div>
+    <div class="stat-card stat-completed">
+      <span class="stat-number">{{ completedTasks }}</span>
+      <span class="stat-label">Concluídas</span>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="isLoading" class="loading">
+    <div class="spinner"></div>
+    <p>Carregando tarefas...</p>
+  </div>
+
+  <!-- Lista de tarefas -->
+  <div *ngIf="!isLoading" class="task-list">
+    <div *ngIf="tasks.length === 0" class="empty-state">
+      <span class="empty-icon">📝</span>
+      <p>Nenhuma tarefa encontrada.</p>
+      <p class="text-muted">Crie sua primeira tarefa acima!</p>
+    </div>
+
+    <div
+      *ngFor="let task of tasks"
+      class="task-item"
+      [class.task-done]="task.done"
+    >
+      <div class="task-checkbox" (click)="toggleDone(task)">
+        <span *ngIf="task.done" class="check-icon">✓</span>
+      </div>
+
+      <div class="task-content">
+        <h3 class="task-title">{{ task.title }}</h3>
+        <span class="task-date">Criada em: {{ formatDate(task.createdAt) }}</span>
+      </div>
+
+      <div class="task-actions">
+        <button
+          class="btn btn-sm"
+          [class.btn-success]="!task.done"
+          [class.btn-secondary]="task.done"
+          (click)="toggleDone(task)"
+        >
+          {{ task.done ? '↩️ Reabrir' : '✓ Concluir' }}
+        </button>
+        <button class="btn btn-sm btn-danger" (click)="deleteTask(task)">
+          🗑️ Excluir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

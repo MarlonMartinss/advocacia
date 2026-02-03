@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: advocacia-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-advocacia}
+      POSTGRES_USER: ${POSTGRES_USER:-advocacia}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-advocacia123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-advocacia} -d ${POSTGRES_DB:-advocacia}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - advocacia-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: advocacia-backend
+    environment:
+      SPRING_PROFILES_ACTIVE: dev
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-advocacia}
+      SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-advocacia}
+      SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD:-advocacia123}
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - advocacia-network
+    # Para desenvolvimento com hot reload, descomente as linhas abaixo:
+    # volumes:
+    #   - ./backend:/app
+    #   - ~/.m2:/root/.m2
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: development
+    container_name: advocacia-frontend
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    environment:
+      - NODE_ENV=development
+    depends_on:
+      - backend
+    networks:
+      - advocacia-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  advocacia-network:
+    driver: bridge

@@ -28,6 +28,9 @@ WORKDIR /app
 RUN addgroup -g 1001 -S appgroup && \
     adduser -u 1001 -S appuser -G appgroup
 
+# Criar pasta de uploads com permissão para o usuário da aplicação
+RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app/uploads
+
 # Copiar JAR do stage de build
 COPY --from=builder /app/target/*.jar app.jar
 

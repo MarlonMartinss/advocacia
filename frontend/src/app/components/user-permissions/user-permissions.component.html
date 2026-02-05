@@ -1,0 +1,59 @@
+<div class="permissions-container">
+  <h2 class="page-title">Permissões usuários</h2>
+
+  <div *ngIf="error" class="error-message">
+    <span>{{ error }}</span>
+    <button class="btn btn-sm btn-secondary" (click)="error = null">×</button>
+  </div>
+
+  <div *ngIf="successMessage" class="success-message">
+    <span>{{ successMessage }}</span>
+    <button class="btn btn-sm btn-secondary" (click)="successMessage = null">×</button>
+  </div>
+
+  <div *ngIf="isLoading" class="loading">
+    <div class="spinner"></div>
+    <p>Carregando usuários...</p>
+  </div>
+
+  <div *ngIf="!isLoading" class="permissions-layout">
+    <div class="user-list-panel card">
+      <h3 class="panel-title">Usuários</h3>
+      <div class="user-list-items">
+        <button
+          *ngFor="let user of users"
+          class="user-list-item"
+          [class.active]="selectedUser?.id === user.id"
+          (click)="selectUser(user)"
+        >
+          <span class="user-list-name">{{ user.name }}</span>
+          <span class="user-list-role">{{ user.role }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="screens-panel card">
+      <h3 class="panel-title">Telas permitidas</h3>
+      <p *ngIf="!selectedUser" class="hint">Selecione um usuário para gerenciar permissões.</p>
+      <div *ngIf="selectedUser" class="screens-list">
+        <div *ngFor="let screen of screens" class="screen-item">
+          <label class="checkbox-label">
+            <input
+              type="checkbox"
+              [checked]="hasScreen(screen.code)"
+              (change)="toggleScreen(screen.code)"
+            />
+            <span>{{ screen.label }}</span>
+          </label>
+        </div>
+        <button
+          class="btn btn-primary save-btn"
+          [disabled]="saving"
+          (click)="save()"
+        >
+          {{ saving ? 'Salvando...' : 'Salvar permissões' }}
+        </button>
+      </div>
+    </div>
+  </div>
+</div>

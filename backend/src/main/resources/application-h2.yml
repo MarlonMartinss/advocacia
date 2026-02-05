@@ -1,0 +1,32 @@
+# =============================================
+# Profile: H2 (apenas para testes locais opcionais - NÃO usar em produção/cliente)
+# O sistema em produção deve usar sempre PostgreSQL (perfil dev).
+# Use: SPRING_PROFILES_ACTIVE=h2 somente se não tiver Postgres disponível localmente.
+# Banco em: ./data/advocacia.mv.db (na pasta do backend)
+# =============================================
+spring:
+  datasource:
+    url: jdbc:h2:file:./data/advocacia;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;AUTO_SERVER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+    hikari:
+      maximum-pool-size: 5
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+  flyway:
+    enabled: false
+
+  devtools:
+    restart:
+      enabled: true
+
+logging:
+  level:
+    com.advocacia: DEBUG
+    org.hibernate.SQL: DEBUG

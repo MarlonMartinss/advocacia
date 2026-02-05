@@ -3,7 +3,24 @@ spring:
     name: advocacia-backend
 
   profiles:
+    # Padrão: PostgreSQL (dev). Em produção/cliente usar sempre Postgres. H2 só para testes locais opcionais.
     active: ${SPRING_PROFILES_ACTIVE:dev}
+
+  # Evita que /api/* seja tratado como recurso estático (Spring Boot 3.2+)
+  web:
+    resources:
+      add-mappings: false
+
+  # Configuração de upload de arquivos
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 10MB
+      max-request-size: 10MB
+
+# Pasta de upload de arquivos
+file:
+  upload-dir: ${FILE_UPLOAD_DIR:./uploads}
 
   jpa:
     open-in-view: false
@@ -40,3 +57,8 @@ logging:
     com.advocacia: DEBUG
     org.springframework.web: INFO
     org.hibernate.SQL: DEBUG
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  expiration: ${JWT_EXPIRATION:86400000}

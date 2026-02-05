@@ -1,0 +1,289 @@
+/* =============================================
+   Login - Advocacia Premium
+   Zanotelli Advogados Associados
+   =============================================
+   Estilo: glassmorphism, dourado, tipografia serifada.
+   Fundo: imagem institucional + overlay + blur.
+   ============================================= */
+
+/* Variáveis - paleta grafite + dourado */
+:host {
+  --gold: #c9a962;
+  --gold-light: #d4b978;
+  --gold-dark: #a68b4a;
+  --graphite: #0f0f0f;
+  --graphite-light: #1a1a1a;
+  --gray-muted: #9ca3af;
+  --gray-light: #d1d5db;
+  --glass-bg: rgba(15, 15, 15, 0.55);
+  --glass-border: rgba(201, 169, 98, 0.25);
+  --overlay: rgba(0, 0, 0, 0.55);
+  --font-serif: 'Cormorant Garamond', Georgia, 'Times New Roman', serif;
+}
+
+/* Wrapper: 100% da tela, layout em coluna (título em cima, card embaixo) */
+.login-wrapper {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+  overflow-x: hidden;
+}
+
+/* Backdrop: imagem institucional + overlay escuro + blur */
+.login-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+
+  /* Imagem de fundo - biblioteca institucional com blur leve */
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -20px;
+    background-image: url('https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=1920');
+    background-size: cover;
+    background-position: center;
+    filter: blur(6px);
+    -webkit-filter: blur(6px);
+  }
+
+  /* Overlay escuro para legibilidade */
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: var(--overlay);
+  }
+}
+
+/* Card central - glassmorphism discreto */
+.login-card {
+  position: relative;
+  z-index: 10;
+  flex-shrink: 0;
+  width: 100%;
+  max-width: 420px;
+  padding: 2.5rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  /* Fallback para navegadores sem backdrop-filter */
+  @supports not (backdrop-filter: blur(8px)) {
+    background: rgba(15, 15, 15, 0.85);
+  }
+}
+
+/* Título institucional – tipografia serifada, elegante e jurídica */
+.login-brand {
+  position: relative;
+  z-index: 10;
+  display: block;
+  font-family: var(--font-serif);
+  font-size: 2.25rem;
+  font-weight: 600;
+  color: #ffffff !important;
+  margin: 0 0 2rem 0;
+  padding: 0 1rem;
+  max-width: 90%;
+  text-align: center;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.55);
+  flex-shrink: 0;
+  visibility: visible;
+  opacity: 1;
+}
+
+.login-subtitle {
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 0.875rem;
+  color: var(--gray-muted);
+  margin: 0;
+}
+
+/* Formulário */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--gray-light);
+}
+
+/* Inputs escuros, borda fina, foco dourado sutil */
+.form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 0.9375rem;
+  font-family: 'Inter', sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+  &::placeholder {
+    color: var(--gray-muted);
+  }
+
+  &:focus {
+    outline: none;
+    border-color: var(--gold);
+    box-shadow: 0 0 0 2px rgba(201, 169, 98, 0.2);
+  }
+}
+
+/* Links - dourado claro/cinza, underline no hover - área de toque confortável */
+.login-link {
+  display: inline-block;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8125rem;
+  color: var(--gold-light);
+  text-decoration: none;
+  padding: 0.5rem 0;
+  min-height: 44px;
+  line-height: 2;
+  transition: color 0.2s ease, text-decoration 0.2s ease;
+
+  &:hover {
+    color: var(--gold);
+    text-decoration: underline;
+  }
+
+  &-secondary {
+    color: var(--gray-muted);
+    text-align: center;
+
+    &:hover {
+      color: var(--gray-light);
+    }
+  }
+}
+
+/* Mensagem de erro */
+.error-message {
+  padding: 0.75rem 1rem;
+  background: rgba(220, 38, 38, 0.15);
+  border: 1px solid rgba(220, 38, 38, 0.4);
+  border-radius: 6px;
+  color: #fca5a5;
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+/* Botão Entrar - gradiente dourado discreto (metal), texto escuro - área de toque mínima 44px */
+.btn-entrar {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.875rem 1.25rem;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  background: linear-gradient(180deg, var(--gold-light) 0%, var(--gold-dark) 100%);
+  border: 1px solid rgba(201, 169, 98, 0.5);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 0.2s ease, transform 0.1s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.99);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+.loading-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(26, 26, 26, 0.3);
+  border-top-color: #1a1a1a;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Responsividade - mobile: card ~90% da largura */
+@media (max-width: 480px) {
+  .login-wrapper {
+    padding: 1.5rem 0.75rem;
+  }
+
+  .login-card {
+    max-width: 90%;
+    width: calc(100% - 1.5rem);
+    padding: 1.75rem;
+  }
+
+  .login-brand {
+    font-size: 1.75rem;
+    letter-spacing: 0.03em;
+    margin-bottom: 1.5rem;
+    padding: 0 0.5rem;
+  }
+}
+
+/* Telas muito pequenas */
+@media (max-width: 360px) {
+  .login-wrapper {
+    padding: 1rem 0.5rem;
+  }
+
+  .login-card {
+    max-width: 95%;
+    width: calc(100% - 1rem);
+    padding: 1.25rem;
+  }
+
+  .login-brand {
+    font-size: 1.5rem;
+    letter-spacing: 0.02em;
+    margin-bottom: 1.25rem;
+  }
+
+  .login-form {
+    gap: 1rem;
+  }
+}

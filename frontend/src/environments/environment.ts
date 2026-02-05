@@ -1,4 +1,5 @@
 export const environment = {
   production: false,
-  apiUrl: 'http://localhost:8080/api'
+  // Em dev, use /api para o proxy (ng serve) encaminhar para localhost:8080
+  apiUrl: '/api'
 };

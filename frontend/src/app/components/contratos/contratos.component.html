@@ -1,0 +1,674 @@
+<div class="contratos-container">
+  <!-- LISTA DE CONTRATOS -->
+  <div *ngIf="showList" class="list-view">
+    <div class="page-header">
+      <h1 class="page-title">CONTRATOS</h1>
+      <button class="btn btn-primary" (click)="novoContrato()">
+        <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        Novo contrato
+      </button>
+    </div>
+
+    <div *ngIf="error" class="error-message">
+      <span>{{ error }}</span>
+      <button class="btn-close" (click)="error = null">×</button>
+    </div>
+
+    <div *ngIf="successMessage" class="success-message">
+      <span>{{ successMessage }}</span>
+      <button class="btn-close" (click)="successMessage = null">×</button>
+    </div>
+
+    <div *ngIf="isLoading" class="loading">
+      <div class="spinner"></div>
+      <p>Carregando contratos...</p>
+    </div>
+
+    <div *ngIf="!isLoading" class="card table-card">
+      <div *ngIf="contratos.length === 0" class="empty-state">
+        <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+        </svg>
+        <p>Nenhum contrato encontrado.</p>
+        <button class="btn btn-primary" (click)="novoContrato()">Criar primeiro contrato</button>
+      </div>
+
+      <div *ngIf="contratos.length > 0" class="table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Vendedor</th>
+              <th>Comprador</th>
+              <th>Valor Total</th>
+              <th>Status</th>
+              <th>Criado em</th>
+              <th class="th-actions">Ações</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let contrato of contratos">
+              <td>#{{ contrato.id }}</td>
+              <td>{{ contrato.vendedorNome || '-' }}</td>
+              <td>{{ contrato.compradorNome || '-' }}</td>
+              <td>{{ formatCurrency(contrato.negocioValorTotal ?? null) }}</td>
+              <td>
+                <span class="status-badge" [class.status-draft]="contrato.status === 'DRAFT'" [class.status-final]="contrato.status === 'FINAL'">
+                  {{ getStatusLabel(contrato.status) }}
+                </span>
+              </td>
+              <td>{{ formatDate(contrato.createdAt) }}</td>
+              <td class="cell-actions">
+                <button class="btn-icon-sm" (click)="editarContrato(contrato)" title="Editar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+                <button class="btn-icon-sm btn-danger" (click)="excluirContrato(contrato)" title="Excluir" [disabled]="contrato.status === 'FINAL'">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="3,6 5,6 21,6"/>
+                    <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                  </svg>
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- WIZARD DE FORMULÁRIO -->
+  <div *ngIf="!showList" class="wizard-view">
+    <div class="wizard-header">
+      <button class="btn btn-secondary btn-back" (click)="voltarParaLista()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Voltar
+      </button>
+      <h1 class="page-title">{{ editingContrato ? 'Editar Contrato' : 'Novo Contrato' }}</h1>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper">
+      <div *ngFor="let step of steps" 
+           class="step" 
+           [class.active]="step.number === currentPage"
+           [class.completed]="step.number < currentPage"
+           [class.disabled]="step.number > currentPage"
+           (click)="goToPage(step.number)">
+        <div class="step-number">
+          <span *ngIf="step.number >= currentPage">{{ step.number }}</span>
+          <svg *ngIf="step.number < currentPage" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </div>
+        <div class="step-info">
+          <span class="step-title">{{ step.title }}</span>
+          <span class="step-subtitle">{{ step.subtitle }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div *ngIf="error" class="error-message">
+      <span>{{ error }}</span>
+      <button class="btn-close" (click)="error = null">×</button>
+    </div>
+
+    <div *ngIf="successMessage" class="success-message">
+      <span>{{ successMessage }}</span>
+      <button class="btn-close" (click)="successMessage = null">×</button>
+    </div>
+
+    <form [formGroup]="contratoForm" class="wizard-form">
+      <!-- PÁGINA 1: VENDEDOR + SÓCIO -->
+      <div *ngIf="currentPage === 1" class="page-content">
+        <div class="form-section">
+          <h3 class="section-title">Vendedor Pessoa Jurídica</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="vendedorNome">Nome</label>
+              <input type="text" id="vendedorNome" formControlName="vendedorNome" placeholder="Razão social">
+            </div>
+            <div class="form-group">
+              <label for="vendedorCnpj">CNPJ</label>
+              <input type="text" id="vendedorCnpj" formControlName="vendedorCnpj" placeholder="00.000.000/0000-00">
+            </div>
+            <div class="form-group">
+              <label for="vendedorEmail">E-mail</label>
+              <input type="email" id="vendedorEmail" formControlName="vendedorEmail" placeholder="email@empresa.com">
+            </div>
+            <div class="form-group">
+              <label for="vendedorTelefone">Telefone</label>
+              <input type="text" id="vendedorTelefone" formControlName="vendedorTelefone" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group full-width">
+              <label for="vendedorEndereco">Endereço</label>
+              <input type="text" id="vendedorEndereco" formControlName="vendedorEndereco" placeholder="Endereço completo">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Sócio Administrador</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="socioNome">Nome</label>
+              <input type="text" id="socioNome" formControlName="socioNome" placeholder="Nome completo">
+            </div>
+            <div class="form-group">
+              <label for="socioCpf">CPF</label>
+              <input type="text" id="socioCpf" formControlName="socioCpf" placeholder="000.000.000-00">
+            </div>
+            <div class="form-group">
+              <label for="socioNacionalidade">Nacionalidade</label>
+              <input type="text" id="socioNacionalidade" formControlName="socioNacionalidade" placeholder="Brasileiro(a)">
+            </div>
+            <div class="form-group">
+              <label for="socioProfissao">Profissão</label>
+              <input type="text" id="socioProfissao" formControlName="socioProfissao" placeholder="Profissão">
+            </div>
+            <div class="form-group">
+              <label for="socioEstadoCivil">Estado Civil</label>
+              <select id="socioEstadoCivil" formControlName="socioEstadoCivil">
+                <option value="">Selecione...</option>
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="União Estável">União Estável</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="socioRegimeBens">Regime de Bens</label>
+              <select id="socioRegimeBens" formControlName="socioRegimeBens">
+                <option value="">Selecione...</option>
+                <option value="Comunhão Parcial">Comunhão Parcial</option>
+                <option value="Comunhão Universal">Comunhão Universal</option>
+                <option value="Separação Total">Separação Total</option>
+                <option value="Participação Final nos Aquestos">Participação Final nos Aquestos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="socioRg">RG</label>
+              <input type="text" id="socioRg" formControlName="socioRg" placeholder="0.000.000">
+            </div>
+            <div class="form-group">
+              <label for="socioCnh">CNH</label>
+              <input type="text" id="socioCnh" formControlName="socioCnh" placeholder="00000000000">
+            </div>
+            <div class="form-group">
+              <label for="socioEmail">E-mail</label>
+              <input type="email" id="socioEmail" formControlName="socioEmail" placeholder="email@exemplo.com">
+            </div>
+            <div class="form-group">
+              <label for="socioTelefone">Telefone</label>
+              <input type="text" id="socioTelefone" formControlName="socioTelefone" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group full-width">
+              <label for="socioEndereco">Endereço</label>
+              <input type="text" id="socioEndereco" formControlName="socioEndereco" placeholder="Endereço completo">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PÁGINA 2: COMPRADOR + CÔNJUGE -->
+      <div *ngIf="currentPage === 2" class="page-content">
+        <div class="form-section">
+          <h3 class="section-title">Comprador</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="compradorNome">Nome</label>
+              <input type="text" id="compradorNome" formControlName="compradorNome" placeholder="Nome completo">
+            </div>
+            <div class="form-group">
+              <label for="compradorCpf">CPF</label>
+              <input type="text" id="compradorCpf" formControlName="compradorCpf" placeholder="000.000.000-00">
+            </div>
+            <div class="form-group">
+              <label for="compradorNacionalidade">Nacionalidade</label>
+              <input type="text" id="compradorNacionalidade" formControlName="compradorNacionalidade" placeholder="Brasileiro(a)">
+            </div>
+            <div class="form-group">
+              <label for="compradorProfissao">Profissão</label>
+              <input type="text" id="compradorProfissao" formControlName="compradorProfissao" placeholder="Profissão">
+            </div>
+            <div class="form-group">
+              <label for="compradorEstadoCivil">Estado Civil</label>
+              <select id="compradorEstadoCivil" formControlName="compradorEstadoCivil">
+                <option value="">Selecione...</option>
+                <option value="Solteiro(a)">Solteiro(a)</option>
+                <option value="Casado(a)">Casado(a)</option>
+                <option value="Divorciado(a)">Divorciado(a)</option>
+                <option value="Viúvo(a)">Viúvo(a)</option>
+                <option value="União Estável">União Estável</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="compradorRegimeBens">Regime de Bens</label>
+              <select id="compradorRegimeBens" formControlName="compradorRegimeBens">
+                <option value="">Selecione...</option>
+                <option value="Comunhão Parcial">Comunhão Parcial</option>
+                <option value="Comunhão Universal">Comunhão Universal</option>
+                <option value="Separação Total">Separação Total</option>
+                <option value="Participação Final nos Aquestos">Participação Final nos Aquestos</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="compradorRg">RG</label>
+              <input type="text" id="compradorRg" formControlName="compradorRg" placeholder="0.000.000">
+            </div>
+            <div class="form-group">
+              <label for="compradorCnh">CNH</label>
+              <input type="text" id="compradorCnh" formControlName="compradorCnh" placeholder="00000000000">
+            </div>
+            <div class="form-group">
+              <label for="compradorEmail">E-mail</label>
+              <input type="email" id="compradorEmail" formControlName="compradorEmail" placeholder="email@exemplo.com">
+            </div>
+            <div class="form-group">
+              <label for="compradorTelefone">Telefone</label>
+              <input type="text" id="compradorTelefone" formControlName="compradorTelefone" placeholder="(00) 00000-0000">
+            </div>
+            <div class="form-group full-width">
+              <label for="compradorEndereco">Endereço</label>
+              <input type="text" id="compradorEndereco" formControlName="compradorEndereco" placeholder="Endereço completo">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Cônjuge / Convivente do Comprador</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="conjugeNome">Nome</label>
+              <input type="text" id="conjugeNome" formControlName="conjugeNome" placeholder="Nome completo">
+            </div>
+            <div class="form-group">
+              <label for="conjugeCpf">CPF</label>
+              <input type="text" id="conjugeCpf" formControlName="conjugeCpf" placeholder="000.000.000-00">
+            </div>
+            <div class="form-group">
+              <label for="conjugeNacionalidade">Nacionalidade</label>
+              <input type="text" id="conjugeNacionalidade" formControlName="conjugeNacionalidade" placeholder="Brasileiro(a)">
+            </div>
+            <div class="form-group">
+              <label for="conjugeProfissao">Profissão</label>
+              <input type="text" id="conjugeProfissao" formControlName="conjugeProfissao" placeholder="Profissão">
+            </div>
+            <div class="form-group">
+              <label for="conjugeRg">RG</label>
+              <input type="text" id="conjugeRg" formControlName="conjugeRg" placeholder="0.000.000">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PÁGINA 3: IMÓVEIS + VEÍCULO -->
+      <div *ngIf="currentPage === 3" class="page-content">
+        <div class="form-section">
+          <h3 class="section-title">Imóvel Objeto do Negócio</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="imovelMatricula">Matrícula nº</label>
+              <input type="text" id="imovelMatricula" formControlName="imovelMatricula" placeholder="Número da matrícula">
+            </div>
+            <div class="form-group">
+              <label for="imovelLivro">Livro nº</label>
+              <input type="text" id="imovelLivro" formControlName="imovelLivro" placeholder="Número do livro">
+            </div>
+            <div class="form-group">
+              <label for="imovelOficio">Ofício de Registro de Imóveis nº</label>
+              <input type="text" id="imovelOficio" formControlName="imovelOficio" placeholder="Número do ofício">
+            </div>
+            <div class="form-group">
+              <label for="imovelProprietario">Nome do proprietário na matrícula</label>
+              <input type="text" id="imovelProprietario" formControlName="imovelProprietario" placeholder="Nome conforme matrícula">
+            </div>
+            <div class="form-group">
+              <label for="imovelMomentoPosse">Momento da transmissão da posse</label>
+              <input type="text" id="imovelMomentoPosse" formControlName="imovelMomentoPosse" placeholder="Ex: Na assinatura do contrato">
+            </div>
+            <div class="form-group">
+              <label for="imovelPrazoTransferencia">Prazo para transferência da propriedade</label>
+              <input type="text" id="imovelPrazoTransferencia" formControlName="imovelPrazoTransferencia" placeholder="Ex: 90 dias">
+            </div>
+            <div class="form-group">
+              <label for="imovelPrazoEscritura">Prazo para lavrar a escritura</label>
+              <input type="text" id="imovelPrazoEscritura" formControlName="imovelPrazoEscritura" placeholder="Ex: 60 dias">
+            </div>
+            <div class="form-group full-width">
+              <label for="imovelDescricao">Descrição do imóvel conforme matrícula</label>
+              <textarea id="imovelDescricao" formControlName="imovelDescricao" rows="3" placeholder="Descrição completa do imóvel"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Imóvel Dado em Permuta</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="permutaImovelMatricula">Matrícula nº</label>
+              <input type="text" id="permutaImovelMatricula" formControlName="permutaImovelMatricula" placeholder="Número da matrícula">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelLivro">Livro nº</label>
+              <input type="text" id="permutaImovelLivro" formControlName="permutaImovelLivro" placeholder="Número do livro">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelOficio">Ofício de Registro de Imóveis nº</label>
+              <input type="text" id="permutaImovelOficio" formControlName="permutaImovelOficio" placeholder="Número do ofício">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelProprietario">Nome do proprietário na matrícula</label>
+              <input type="text" id="permutaImovelProprietario" formControlName="permutaImovelProprietario" placeholder="Nome conforme matrícula">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelMomentoPosse">Momento da transmissão da posse</label>
+              <input type="text" id="permutaImovelMomentoPosse" formControlName="permutaImovelMomentoPosse" placeholder="Ex: Na assinatura do contrato">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelPrazoTransferencia">Prazo para transferência da propriedade</label>
+              <input type="text" id="permutaImovelPrazoTransferencia" formControlName="permutaImovelPrazoTransferencia" placeholder="Ex: 90 dias">
+            </div>
+            <div class="form-group">
+              <label for="permutaImovelPrazoEscritura">Prazo para lavrar a escritura</label>
+              <input type="text" id="permutaImovelPrazoEscritura" formControlName="permutaImovelPrazoEscritura" placeholder="Ex: 60 dias">
+            </div>
+            <div class="form-group full-width">
+              <label for="permutaImovelDescricao">Descrição do imóvel conforme matrícula</label>
+              <textarea id="permutaImovelDescricao" formControlName="permutaImovelDescricao" rows="3" placeholder="Descrição completa do imóvel"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Veículo Dado em Permuta</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="veiculoMarca">Marca</label>
+              <input type="text" id="veiculoMarca" formControlName="veiculoMarca" placeholder="Ex: Volkswagen">
+            </div>
+            <div class="form-group">
+              <label for="veiculoModelo">Modelo</label>
+              <input type="text" id="veiculoModelo" formControlName="veiculoModelo" placeholder="Ex: Gol">
+            </div>
+            <div class="form-group">
+              <label for="veiculoAno">Ano</label>
+              <input type="text" id="veiculoAno" formControlName="veiculoAno" placeholder="Ex: 2020">
+            </div>
+            <div class="form-group">
+              <label for="veiculoPlaca">Placa</label>
+              <input type="text" id="veiculoPlaca" formControlName="veiculoPlaca" placeholder="ABC-1234">
+            </div>
+            <div class="form-group">
+              <label for="veiculoChassi">Chassi</label>
+              <input type="text" id="veiculoChassi" formControlName="veiculoChassi" placeholder="Número do chassi">
+            </div>
+            <div class="form-group">
+              <label for="veiculoCor">Cor</label>
+              <input type="text" id="veiculoCor" formControlName="veiculoCor" placeholder="Ex: Prata">
+            </div>
+            <div class="form-group">
+              <label for="veiculoMotor">Nº Motor</label>
+              <input type="text" id="veiculoMotor" formControlName="veiculoMotor" placeholder="Número do motor">
+            </div>
+            <div class="form-group">
+              <label for="veiculoRenavam">Renavam</label>
+              <input type="text" id="veiculoRenavam" formControlName="veiculoRenavam" placeholder="Número do Renavam">
+            </div>
+            <div class="form-group">
+              <label for="veiculoDataEntrega">Data da entrega do veículo</label>
+              <input type="date" id="veiculoDataEntrega" formControlName="veiculoDataEntrega">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PÁGINA 4: NEGÓCIO + HONORÁRIOS -->
+      <div *ngIf="currentPage === 4" class="page-content">
+        <div class="form-section">
+          <h3 class="section-title">Negócio</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="negocioValorTotal">Valor total do negócio (R$)</label>
+              <input type="number" id="negocioValorTotal" formControlName="negocioValorTotal" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioValorEntrada">Valor da entrada (R$)</label>
+              <input type="number" id="negocioValorEntrada" formControlName="negocioValorEntrada" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioFormaPagamento">Data e forma de pagamento</label>
+              <input type="text" id="negocioFormaPagamento" formControlName="negocioFormaPagamento" placeholder="Ex: Transferência bancária em 10/01/2025">
+            </div>
+            <div class="form-group">
+              <label for="negocioNumParcelas">Nº de parcelas</label>
+              <input type="number" id="negocioNumParcelas" formControlName="negocioNumParcelas" placeholder="0">
+            </div>
+            <div class="form-group">
+              <label for="negocioValorParcela">Valor de cada parcela (R$)</label>
+              <input type="number" id="negocioValorParcela" formControlName="negocioValorParcela" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioVencimentos">Vencimentos</label>
+              <input type="text" id="negocioVencimentos" formControlName="negocioVencimentos" placeholder="Ex: Todo dia 10">
+            </div>
+            <div class="form-group">
+              <label for="negocioValorImovelPermuta">Valor do imóvel dado em permuta (R$)</label>
+              <input type="number" id="negocioValorImovelPermuta" formControlName="negocioValorImovelPermuta" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioValorVeiculoPermuta">Valor do veículo dado em permuta (R$)</label>
+              <input type="number" id="negocioValorVeiculoPermuta" formControlName="negocioValorVeiculoPermuta" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioValorFinanciamento">Valor do financiamento (R$)</label>
+              <input type="number" id="negocioValorFinanciamento" formControlName="negocioValorFinanciamento" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="negocioPrazoPagamento">Prazo para pagamento</label>
+              <input type="text" id="negocioPrazoPagamento" formControlName="negocioPrazoPagamento" placeholder="Ex: 30 dias">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Conta Bancária para Depósito</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="contaTitular">Titular</label>
+              <input type="text" id="contaTitular" formControlName="contaTitular" placeholder="Nome do titular">
+            </div>
+            <div class="form-group">
+              <label for="contaBanco">Banco</label>
+              <input type="text" id="contaBanco" formControlName="contaBanco" placeholder="Nome do banco">
+            </div>
+            <div class="form-group">
+              <label for="contaAgencia">Agência</label>
+              <input type="text" id="contaAgencia" formControlName="contaAgencia" placeholder="Número da agência">
+            </div>
+            <div class="form-group">
+              <label for="contaPix">PIX</label>
+              <input type="text" id="contaPix" formControlName="contaPix" placeholder="Chave PIX">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Honorários de Intermediação</h3>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="honorariosValor">Valor (R$)</label>
+              <input type="number" id="honorariosValor" formControlName="honorariosValor" placeholder="0,00" step="0.01">
+            </div>
+            <div class="form-group">
+              <label for="honorariosFormaPagamento">Forma de pagamento</label>
+              <input type="text" id="honorariosFormaPagamento" formControlName="honorariosFormaPagamento" placeholder="Ex: Transferência bancária">
+            </div>
+            <div class="form-group">
+              <label for="honorariosDataPagamento">Data do pagamento</label>
+              <input type="date" id="honorariosDataPagamento" formControlName="honorariosDataPagamento">
+            </div>
+          </div>
+        </div>
+
+        <div class="form-section">
+          <h3 class="section-title">Observações e Assinaturas</h3>
+          <div class="form-grid">
+            <div class="form-group full-width">
+              <label for="observacoes">Observações sobre o negócio</label>
+              <textarea id="observacoes" formControlName="observacoes" rows="4" placeholder="Observações adicionais"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="dataContrato">Data do contrato</label>
+              <input type="date" id="dataContrato" formControlName="dataContrato">
+            </div>
+            <div class="form-group">
+              <label for="assinaturaCorretor">Corretor</label>
+              <input type="text" id="assinaturaCorretor" formControlName="assinaturaCorretor" placeholder="Nome do corretor">
+            </div>
+            <div class="form-group">
+              <label for="assinaturaAgenciador">Agenciador</label>
+              <input type="text" id="assinaturaAgenciador" formControlName="assinaturaAgenciador" placeholder="Nome do agenciador">
+            </div>
+            <div class="form-group">
+              <label for="assinaturaGestor">Gestor</label>
+              <input type="text" id="assinaturaGestor" formControlName="assinaturaGestor" placeholder="Nome do gestor">
+            </div>
+          </div>
+        </div>
+
+        <!-- Seção de Documentos Anexos (visível quando o contrato já foi salvo e tem ID) -->
+        <div class="form-section" *ngIf="contratoId">
+          <h3 class="section-title">Documentos Anexos</h3>
+          <div class="anexos-area">
+            <!-- Botões para adicionar -->
+            <div class="anexos-actions">
+              <button type="button" class="btn btn-secondary" (click)="abrirCamera()">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                Tirar Foto
+              </button>
+              <button type="button" class="btn btn-secondary" (click)="selecionarArquivo()">
+                <svg class="btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Escolher Arquivo
+              </button>
+              <!-- Inputs ocultos -->
+              <input type="file" #fileInput hidden accept="image/*,application/pdf,.doc,.docx" (change)="onFileSelected($event)">
+              <input type="file" #cameraInput hidden accept="image/*" capture="environment" (change)="onFileSelected($event)">
+            </div>
+
+            <!-- Indicador de upload -->
+            <div *ngIf="isUploading" class="upload-indicator">
+              <div class="spinner-small"></div>
+              <span>Enviando arquivo...</span>
+            </div>
+
+            <!-- Lista de anexos -->
+            <div class="anexos-list" *ngIf="anexos.length > 0">
+              <div *ngFor="let anexo of anexos" class="anexo-item">
+                <div class="anexo-icon">
+                  <svg *ngIf="isImage(anexo.tipoMime)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <svg *ngIf="!isImage(anexo.tipoMime)" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                  </svg>
+                </div>
+                <div class="anexo-info">
+                  <span class="anexo-nome">{{ anexo.nomeOriginal }}</span>
+                  <span class="anexo-tamanho">{{ formatFileSize(anexo.tamanho) }}</span>
+                </div>
+                <div class="anexo-actions">
+                  <button type="button" class="btn-icon-sm" (click)="downloadAnexo(anexo)" title="Baixar">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                      <polyline points="7 10 12 15 17 10"/>
+                      <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                  </button>
+                  <button type="button" class="btn-icon-sm btn-danger" (click)="excluirAnexo(anexo)" title="Excluir">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Mensagem quando não há anexos -->
+            <div *ngIf="anexos.length === 0 && !isUploading" class="anexos-empty">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              <span>Nenhum documento anexado</span>
+              <span class="hint">Tire uma foto ou escolha um arquivo do dispositivo</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Aviso para salvar antes de anexar (contrato ainda não tem ID) -->
+        <div class="form-section" *ngIf="!contratoId">
+          <h3 class="section-title">Documentos Anexos</h3>
+          <div class="anexos-aviso">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+            <span>Avance com « Próximo » ou salve o contrato para poder anexar documentos</span>
+          </div>
+        </div>
+      </div>
+    </form>
+
+    <!-- Navegação -->
+    <div class="wizard-navigation">
+      <button type="button" class="btn btn-secondary" (click)="prevPage()" *ngIf="currentPage > 1" [disabled]="isSaving">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+        Voltar
+      </button>
+      <div class="nav-spacer" *ngIf="currentPage === 1"></div>
+      
+      <div class="nav-info">
+        <span>Página {{ currentPage }} de {{ totalPages }}</span>
+        <span *ngIf="isSaving" class="saving-indicator">Salvando...</span>
+      </div>
+
+      <button type="button" class="btn btn-primary" (click)="nextPage()" *ngIf="currentPage < totalPages" [disabled]="isSaving">
+        Próximo
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+
+      <button type="button" class="btn btn-success" (click)="finalizar()" *ngIf="currentPage === totalPages" [disabled]="isSaving">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>
+        {{ isSaving ? 'Finalizando...' : 'Finalizar Contrato' }}
+      </button>
+    </div>
+  </div>
+</div>

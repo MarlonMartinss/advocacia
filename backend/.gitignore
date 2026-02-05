@@ -51,6 +51,9 @@ bin/
 # Spring Boot
 spring-shell.log
 
+# H2 database (perfil h2 com persistência em arquivo)
+data/
+
 # OS files
 .DS_Store
 Thumbs.db

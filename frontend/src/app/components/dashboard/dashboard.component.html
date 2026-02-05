@@ -1,0 +1,78 @@
+<div class="dashboard">
+  <h1 class="page-title">VISÃO GERAL DE CONTRATOS</h1>
+
+  <!-- Stats Cards -->
+  <div class="stats-grid">
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+          <polyline points="14,2 14,8 20,8"/>
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-number">{{ stats.emAberto }}</span>
+        <span class="stat-label">EM ABERTO</span>
+      </div>
+    </div>
+
+    <div class="stat-card">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+          <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-number">{{ stats.aguardandoAssinatura }}</span>
+        <span class="stat-label">AGUARDANDO ASSINATURA</span>
+      </div>
+    </div>
+
+    <div class="stat-card stat-danger">
+      <div class="stat-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="12,6 12,12 16,14"/>
+        </svg>
+      </div>
+      <div class="stat-content">
+        <span class="stat-number">{{ stats.vencendo30Dias }}</span>
+        <span class="stat-label">VENCENDO EM 30 DIAS</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contratos Recentes -->
+  <div class="card table-card">
+    <h2 class="section-title">Contratos Recentes</h2>
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Contrato</th>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Status</th>
+            <th>R$</th>
+            <th>Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let contrato of contratosRecentes">
+            <td class="cell-numero">{{ contrato.numero }}</td>
+            <td>{{ contrato.nome }}</td>
+            <td>{{ contrato.tipo }}</td>
+            <td>
+              <span class="status-badge" [class]="'status-' + contrato.status.toLowerCase()">
+                {{ getStatusLabel(contrato.status) }}
+              </span>
+            </td>
+            <td>{{ formatCurrency(contrato.valor) }}</td>
+            <td>{{ contrato.data }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>

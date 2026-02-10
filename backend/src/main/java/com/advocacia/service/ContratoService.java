@@ -1,31 +1,43 @@
 package com.advocacia.service;
 
-import com.advocacia.dto.ContratoRequest;
-import com.advocacia.dto.ContratoResponse;
+import com.advocacia.dto.*;
 import com.advocacia.entity.Contrato;
+import com.advocacia.entity.ContratoComprador;
 import com.advocacia.entity.ContratoStatus;
-import com.advocacia.exception.UserNotFoundException;
+import com.advocacia.entity.ContratoVendedor;
 import com.advocacia.repository.ContratoRepository;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ContratoService {
 
-    private final ContratoRepository contratoRepository;
+    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
+    private final ContratoRepository contratoRepository;
+    private final ContratoAuditService auditService;
+
+    @Transactional(readOnly = true)
     public List<ContratoResponse> findAll() {
         return contratoRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(this::toResponse)
                 .collect(Collectors.toList());
     }
 
+    @Transactional(readOnly = true)
     public ContratoResponse findById(Long id) {
         Contrato contrato = contratoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Contrato não encontrado"));
@@ -38,7 +50,7 @@ public class ContratoService {
                 .status(ContratoStatus.DRAFT)
                 .paginaAtual(1)
                 .build();
-        
+
         updateContratoFromRequest(contrato, request);
         contrato = contratoRepository.save(contrato);
         return toResponse(contrato);
@@ -46,16 +58,37 @@ public class ContratoService {
 
     @Transactional
     public ContratoResponse update(Long id, ContratoRequest request) {
+        log.info("[HISTORICO] UPDATE contrato id={}, payload negocioValorTotal={}", id, request.getNegocioValorTotal());
+
         Contrato contrato = contratoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Contrato não encontrado"));
 
-        if (contrato.getStatus() == ContratoStatus.FINAL) {
-            throw new RuntimeException("Não é possível editar um contrato finalizado");
-        }
+        // Snapshot antes da alteração
+        ContratoResponse before = toResponse(contrato);
+        log.info("[HISTORICO] contrato id={} BEFORE negocioValorTotal={}", id, before.getNegocioValorTotal());
 
         updateContratoFromRequest(contrato, request);
         contrato = contratoRepository.save(contrato);
-        return toResponse(contrato);
+
+        ContratoResponse after = toResponse(contrato);
+        log.info("[HISTORICO] contrato id={} AFTER negocioValorTotal={}", id, after.getNegocioValorTotal());
+
+        try {
+            auditService.recordChanges(id, before, after);
+        } catch (Exception e) {
+            log.warn("Auditoria não registrada para contrato {}: {}", id, e.getMessage(), e);
+            if (!Objects.equals(before.getNegocioValorTotal(), after.getNegocioValorTotal())) {
+                try {
+                    auditService.recordSimpleChange(id, "negocioValorTotal",
+                            before.getNegocioValorTotal() != null ? before.getNegocioValorTotal().toPlainString() : "null",
+                            after.getNegocioValorTotal() != null ? after.getNegocioValorTotal().toPlainString() : "null");
+                } catch (Exception fallbackEx) {
+                    log.warn("Fallback de auditoria (negocioValorTotal) também falhou para contrato {}: {}", id, fallbackEx.getMessage());
+                }
+            }
+        }
+
+        return after;
     }
 
     @Transactional
@@ -67,14 +100,16 @@ public class ContratoService {
             throw new RuntimeException("Contrato já está finalizado");
         }
 
-        // Validação de campos obrigatórios desativada por enquanto (reativar quando solicitado)
-        // List<String> erros = validarContratoCompleto(contrato);
-        // if (!erros.isEmpty()) {
-        //     throw new RuntimeException("Campos obrigatórios não preenchidos: " + String.join(", ", erros));
-        // }
-
+        String oldStatus = contrato.getStatus().name();
         contrato.setStatus(ContratoStatus.FINAL);
         contrato = contratoRepository.save(contrato);
+
+        try {
+            auditService.recordSimpleChange(id, "status", oldStatus, "FINAL");
+        } catch (Exception e) {
+            log.warn("Auditoria não registrada para contrato {} (finalizar): {}", id, e.getMessage());
+        }
+
         return toResponse(contrato);
     }
 
@@ -82,11 +117,6 @@ public class ContratoService {
     public void delete(Long id) {
         Contrato contrato = contratoRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Contrato não encontrado"));
-        
-        if (contrato.getStatus() == ContratoStatus.FINAL) {
-            throw new RuntimeException("Não é possível excluir um contrato finalizado");
-        }
-        
         contratoRepository.delete(contrato);
     }
 
@@ -95,30 +125,119 @@ public class ContratoService {
         contratoRepository.deleteAll();
     }
 
-    private List<String> validarContratoCompleto(Contrato contrato) {
-        List<String> erros = new ArrayList<>();
+    @Transactional
+    public ContratoResponse updateVendedores(Long id, List<VendedorRequest> vendedores) {
+        Contrato contrato = contratoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Contrato não encontrado"));
 
-        // Página 1: Vendedor + Sócio
-        if (isBlank(contrato.getVendedorNome())) erros.add("Nome do Vendedor");
-        if (isBlank(contrato.getVendedorCnpj())) erros.add("CNPJ do Vendedor");
-        if (isBlank(contrato.getSocioNome())) erros.add("Nome do Sócio");
-        if (isBlank(contrato.getSocioCpf())) erros.add("CPF do Sócio");
+        // Snapshot antes
+        ContratoResponse before = toResponse(contrato);
 
-        // Página 2: Comprador
-        if (isBlank(contrato.getCompradorNome())) erros.add("Nome do Comprador");
-        if (isBlank(contrato.getCompradorCpf())) erros.add("CPF do Comprador");
+        contrato.getVendedores().clear();
+        if (vendedores != null) {
+            for (int i = 0; i < vendedores.size(); i++) {
+                VendedorRequest vr = vendedores.get(i);
+                ContratoVendedor v = ContratoVendedor.builder()
+                        .contrato(contrato)
+                        .ordem(i)
+                        .nome(vr.getNome())
+                        .documento(sanitizeDigits(vr.getDocumento()))
+                        .email(vr.getEmail())
+                        .telefone(vr.getTelefone())
+                        .endereco(vr.getEndereco())
+                        .socioNome(vr.getSocioNome())
+                        .socioCpf(vr.getSocioCpf())
+                        .socioNacionalidade(vr.getSocioNacionalidade())
+                        .socioProfissao(vr.getSocioProfissao())
+                        .socioEstadoCivil(vr.getSocioEstadoCivil())
+                        .socioRegimeBens(vr.getSocioRegimeBens())
+                        .socioRg(vr.getSocioRg())
+                        .socioCnh(vr.getSocioCnh())
+                        .socioEmail(vr.getSocioEmail())
+                        .socioTelefone(vr.getSocioTelefone())
+                        .socioEndereco(vr.getSocioEndereco())
+                        .build();
+                contrato.getVendedores().add(v);
+            }
+        }
+        contrato = contratoRepository.save(contrato);
 
-        // Página 3: Imóvel
-        if (isBlank(contrato.getImovelMatricula())) erros.add("Matrícula do Imóvel");
+        ContratoResponse after = toResponse(contrato);
+        try {
+            auditService.recordChanges(id, before, after);
+        } catch (Exception e) {
+            log.warn("Auditoria não registrada para contrato {} (vendedores): {}", id, e.getMessage(), e);
+            throw new RuntimeException(e);
+        }
 
-        // Página 4: Negócio
-        if (contrato.getNegocioValorTotal() == null) erros.add("Valor Total do Negócio");
+        return after;
+    }
 
-        return erros;
+    @Transactional
+    public ContratoResponse updateCompradores(Long id, List<CompradorRequest> compradores) {
+        Contrato contrato = contratoRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Contrato não encontrado"));
+
+        // Snapshot antes
+        ContratoResponse before = toResponse(contrato);
+
+        contrato.getCompradores().clear();
+        if (compradores != null) {
+            for (int i = 0; i < compradores.size(); i++) {
+                CompradorRequest cr = compradores.get(i);
+                ContratoComprador c = ContratoComprador.builder()
+                        .contrato(contrato)
+                        .ordem(i)
+                        .nome(cr.getNome())
+                        .documento(sanitizeDigits(cr.getDocumento()))
+                        .nacionalidade(cr.getNacionalidade())
+                        .profissao(cr.getProfissao())
+                        .estadoCivil(cr.getEstadoCivil())
+                        .regimeBens(cr.getRegimeBens())
+                        .rg(cr.getRg())
+                        .cnh(cr.getCnh())
+                        .email(cr.getEmail())
+                        .telefone(cr.getTelefone())
+                        .endereco(cr.getEndereco())
+                        .conjugeNome(cr.getConjugeNome())
+                        .conjugeCpf(cr.getConjugeCpf())
+                        .conjugeNacionalidade(cr.getConjugeNacionalidade())
+                        .conjugeProfissao(cr.getConjugeProfissao())
+                        .conjugeRg(cr.getConjugeRg())
+                        .build();
+                contrato.getCompradores().add(c);
+            }
+        }
+        contrato = contratoRepository.save(contrato);
+
+        ContratoResponse after = toResponse(contrato);
+        try {
+            auditService.recordChanges(id, before, after);
+        } catch (Exception e) {
+            log.warn("Auditoria não registrada para contrato {} (compradores): {}", id, e.getMessage(), e);
+            throw new RuntimeException(e);
+        }
+
+        return after;
     }
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String sanitizeDigits(String value) {
+        if (value == null) return null;
+        return value.replaceAll("\\D", "");
+    }
+
+    private List<ParcelaItemDto> parseParcelas(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return OBJECT_MAPPER.readValue(json, new TypeReference<List<ParcelaItemDto>>() {});
+        } catch (JsonProcessingException e) {
+            log.warn("Erro ao deserializar parcelas: {}", e.getMessage());
+            return null;
+        }
     }
 
     private void updateContratoFromRequest(Contrato contrato, ContratoRequest request) {
@@ -126,45 +245,63 @@ public class ContratoService {
 
         if (request.getPaginaAtual() != null) contrato.setPaginaAtual(request.getPaginaAtual());
 
-        // Página 1: Vendedor
-        if (request.getVendedorNome() != null) contrato.setVendedorNome(request.getVendedorNome());
-        if (request.getVendedorCnpj() != null) contrato.setVendedorCnpj(request.getVendedorCnpj());
-        if (request.getVendedorEmail() != null) contrato.setVendedorEmail(request.getVendedorEmail());
-        if (request.getVendedorTelefone() != null) contrato.setVendedorTelefone(request.getVendedorTelefone());
-        if (request.getVendedorEndereco() != null) contrato.setVendedorEndereco(request.getVendedorEndereco());
+        // ========== VENDEDORES ==========
+        if (request.getVendedores() != null) {
+            contrato.getVendedores().clear();
+            for (int i = 0; i < request.getVendedores().size(); i++) {
+                VendedorRequest vr = request.getVendedores().get(i);
+                ContratoVendedor vendedor = ContratoVendedor.builder()
+                        .contrato(contrato)
+                        .ordem(i)
+                        .nome(vr.getNome())
+                        .documento(sanitizeDigits(vr.getDocumento()))
+                        .email(vr.getEmail())
+                        .telefone(vr.getTelefone())
+                        .endereco(vr.getEndereco())
+                        .socioNome(vr.getSocioNome())
+                        .socioCpf(vr.getSocioCpf())
+                        .socioNacionalidade(vr.getSocioNacionalidade())
+                        .socioProfissao(vr.getSocioProfissao())
+                        .socioEstadoCivil(vr.getSocioEstadoCivil())
+                        .socioRegimeBens(vr.getSocioRegimeBens())
+                        .socioRg(vr.getSocioRg())
+                        .socioCnh(vr.getSocioCnh())
+                        .socioEmail(vr.getSocioEmail())
+                        .socioTelefone(vr.getSocioTelefone())
+                        .socioEndereco(vr.getSocioEndereco())
+                        .build();
+                contrato.getVendedores().add(vendedor);
+            }
+        }
 
-        // Página 1: Sócio
-        if (request.getSocioNome() != null) contrato.setSocioNome(request.getSocioNome());
-        if (request.getSocioNacionalidade() != null) contrato.setSocioNacionalidade(request.getSocioNacionalidade());
-        if (request.getSocioProfissao() != null) contrato.setSocioProfissao(request.getSocioProfissao());
-        if (request.getSocioEstadoCivil() != null) contrato.setSocioEstadoCivil(request.getSocioEstadoCivil());
-        if (request.getSocioRegimeBens() != null) contrato.setSocioRegimeBens(request.getSocioRegimeBens());
-        if (request.getSocioCpf() != null) contrato.setSocioCpf(request.getSocioCpf());
-        if (request.getSocioRg() != null) contrato.setSocioRg(request.getSocioRg());
-        if (request.getSocioCnh() != null) contrato.setSocioCnh(request.getSocioCnh());
-        if (request.getSocioEmail() != null) contrato.setSocioEmail(request.getSocioEmail());
-        if (request.getSocioTelefone() != null) contrato.setSocioTelefone(request.getSocioTelefone());
-        if (request.getSocioEndereco() != null) contrato.setSocioEndereco(request.getSocioEndereco());
-
-        // Página 2: Comprador
-        if (request.getCompradorNome() != null) contrato.setCompradorNome(request.getCompradorNome());
-        if (request.getCompradorNacionalidade() != null) contrato.setCompradorNacionalidade(request.getCompradorNacionalidade());
-        if (request.getCompradorProfissao() != null) contrato.setCompradorProfissao(request.getCompradorProfissao());
-        if (request.getCompradorEstadoCivil() != null) contrato.setCompradorEstadoCivil(request.getCompradorEstadoCivil());
-        if (request.getCompradorRegimeBens() != null) contrato.setCompradorRegimeBens(request.getCompradorRegimeBens());
-        if (request.getCompradorCpf() != null) contrato.setCompradorCpf(request.getCompradorCpf());
-        if (request.getCompradorRg() != null) contrato.setCompradorRg(request.getCompradorRg());
-        if (request.getCompradorCnh() != null) contrato.setCompradorCnh(request.getCompradorCnh());
-        if (request.getCompradorEmail() != null) contrato.setCompradorEmail(request.getCompradorEmail());
-        if (request.getCompradorTelefone() != null) contrato.setCompradorTelefone(request.getCompradorTelefone());
-        if (request.getCompradorEndereco() != null) contrato.setCompradorEndereco(request.getCompradorEndereco());
-
-        // Página 2: Cônjuge
-        if (request.getConjugeNome() != null) contrato.setConjugeNome(request.getConjugeNome());
-        if (request.getConjugeNacionalidade() != null) contrato.setConjugeNacionalidade(request.getConjugeNacionalidade());
-        if (request.getConjugeProfissao() != null) contrato.setConjugeProfissao(request.getConjugeProfissao());
-        if (request.getConjugeCpf() != null) contrato.setConjugeCpf(request.getConjugeCpf());
-        if (request.getConjugeRg() != null) contrato.setConjugeRg(request.getConjugeRg());
+        // ========== COMPRADORES ==========
+        if (request.getCompradores() != null) {
+            contrato.getCompradores().clear();
+            for (int i = 0; i < request.getCompradores().size(); i++) {
+                CompradorRequest cr = request.getCompradores().get(i);
+                ContratoComprador comprador = ContratoComprador.builder()
+                        .contrato(contrato)
+                        .ordem(i)
+                        .nome(cr.getNome())
+                        .documento(sanitizeDigits(cr.getDocumento()))
+                        .nacionalidade(cr.getNacionalidade())
+                        .profissao(cr.getProfissao())
+                        .estadoCivil(cr.getEstadoCivil())
+                        .regimeBens(cr.getRegimeBens())
+                        .rg(cr.getRg())
+                        .cnh(cr.getCnh())
+                        .email(cr.getEmail())
+                        .telefone(cr.getTelefone())
+                        .endereco(cr.getEndereco())
+                        .conjugeNome(cr.getConjugeNome())
+                        .conjugeCpf(cr.getConjugeCpf())
+                        .conjugeNacionalidade(cr.getConjugeNacionalidade())
+                        .conjugeProfissao(cr.getConjugeProfissao())
+                        .conjugeRg(cr.getConjugeRg())
+                        .build();
+                contrato.getCompradores().add(comprador);
+            }
+        }
 
         // Página 3: Imóvel Objeto
         if (request.getImovelMatricula() != null) contrato.setImovelMatricula(request.getImovelMatricula());
@@ -196,18 +333,29 @@ public class ContratoService {
         if (request.getVeiculoMotor() != null) contrato.setVeiculoMotor(request.getVeiculoMotor());
         if (request.getVeiculoRenavam() != null) contrato.setVeiculoRenavam(request.getVeiculoRenavam());
         if (request.getVeiculoDataEntrega() != null) contrato.setVeiculoDataEntrega(request.getVeiculoDataEntrega());
+        if (request.getVeiculoKm() != null) contrato.setVeiculoKm(request.getVeiculoKm());
 
-        // Página 4: Negócio
+        // Página 4: Negócio (valor 0 é aplicado quando enviado; null = campo não enviado)
         if (request.getNegocioValorTotal() != null) contrato.setNegocioValorTotal(request.getNegocioValorTotal());
         if (request.getNegocioValorEntrada() != null) contrato.setNegocioValorEntrada(request.getNegocioValorEntrada());
         if (request.getNegocioFormaPagamento() != null) contrato.setNegocioFormaPagamento(request.getNegocioFormaPagamento());
         if (request.getNegocioNumParcelas() != null) contrato.setNegocioNumParcelas(request.getNegocioNumParcelas());
         if (request.getNegocioValorParcela() != null) contrato.setNegocioValorParcela(request.getNegocioValorParcela());
         if (request.getNegocioVencimentos() != null) contrato.setNegocioVencimentos(request.getNegocioVencimentos());
-        if (request.getNegocioValorImovelPermuta() != null) contrato.setNegocioValorImovelPermuta(request.getNegocioValorImovelPermuta());
-        if (request.getNegocioValorVeiculoPermuta() != null) contrato.setNegocioValorVeiculoPermuta(request.getNegocioValorVeiculoPermuta());
+        // Valores de permuta: null do request vira 0 (compatibilidade)
+        contrato.setNegocioValorImovelPermuta(request.getNegocioValorImovelPermuta() != null ? request.getNegocioValorImovelPermuta() : BigDecimal.ZERO);
+        contrato.setNegocioValorVeiculoPermuta(request.getNegocioValorVeiculoPermuta() != null ? request.getNegocioValorVeiculoPermuta() : BigDecimal.ZERO);
         if (request.getNegocioValorFinanciamento() != null) contrato.setNegocioValorFinanciamento(request.getNegocioValorFinanciamento());
         if (request.getNegocioPrazoPagamento() != null) contrato.setNegocioPrazoPagamento(request.getNegocioPrazoPagamento());
+        if (request.getNegocioDataPrimeiraParcela() != null) contrato.setNegocioDataPrimeiraParcela(request.getNegocioDataPrimeiraParcela());
+        if (request.getParcelas() != null) {
+            try {
+                contrato.setNegocioParcelas(OBJECT_MAPPER.writeValueAsString(request.getParcelas()));
+            } catch (JsonProcessingException e) {
+                log.warn("Erro ao serializar parcelas: {}", e.getMessage());
+                contrato.setNegocioParcelas(null);
+            }
+        }
 
         // Página 4: Conta Bancária
         if (request.getContaTitular() != null) contrato.setContaTitular(request.getContaTitular());
@@ -226,47 +374,36 @@ public class ContratoService {
         if (request.getAssinaturaCorretor() != null) contrato.setAssinaturaCorretor(request.getAssinaturaCorretor());
         if (request.getAssinaturaAgenciador() != null) contrato.setAssinaturaAgenciador(request.getAssinaturaAgenciador());
         if (request.getAssinaturaGestor() != null) contrato.setAssinaturaGestor(request.getAssinaturaGestor());
+
+        // Validação jurídica: valores de permuta não negativos e soma não pode exceder valor total
+        BigDecimal imovelPermuta = contrato.getNegocioValorImovelPermuta() != null ? contrato.getNegocioValorImovelPermuta() : BigDecimal.ZERO;
+        BigDecimal veiculoPermuta = contrato.getNegocioValorVeiculoPermuta() != null ? contrato.getNegocioValorVeiculoPermuta() : BigDecimal.ZERO;
+        if (imovelPermuta.compareTo(BigDecimal.ZERO) < 0 || veiculoPermuta.compareTo(BigDecimal.ZERO) < 0) {
+            throw new RuntimeException("Valores de permuta não podem ser negativos.");
+        }
+        if (contrato.getNegocioValorTotal() != null && contrato.getNegocioValorTotal().compareTo(BigDecimal.ZERO) >= 0) {
+            BigDecimal somaPermuta = imovelPermuta.add(veiculoPermuta);
+            if (somaPermuta.compareTo(contrato.getNegocioValorTotal()) > 0) {
+                throw new RuntimeException("A soma dos bens em permuta não pode exceder o valor total do negócio.");
+            }
+        }
     }
 
     private ContratoResponse toResponse(Contrato contrato) {
+        List<VendedorResponse> vendedorResponses = contrato.getVendedores() != null
+                ? contrato.getVendedores().stream().map(this::toVendedorResponse).collect(Collectors.toList())
+                : new ArrayList<>();
+
+        List<CompradorResponse> compradorResponses = contrato.getCompradores() != null
+                ? contrato.getCompradores().stream().map(this::toCompradorResponse).collect(Collectors.toList())
+                : new ArrayList<>();
+
         return ContratoResponse.builder()
                 .id(contrato.getId())
                 .status(contrato.getStatus())
                 .paginaAtual(contrato.getPaginaAtual())
-                // Página 1
-                .vendedorNome(contrato.getVendedorNome())
-                .vendedorCnpj(contrato.getVendedorCnpj())
-                .vendedorEmail(contrato.getVendedorEmail())
-                .vendedorTelefone(contrato.getVendedorTelefone())
-                .vendedorEndereco(contrato.getVendedorEndereco())
-                .socioNome(contrato.getSocioNome())
-                .socioNacionalidade(contrato.getSocioNacionalidade())
-                .socioProfissao(contrato.getSocioProfissao())
-                .socioEstadoCivil(contrato.getSocioEstadoCivil())
-                .socioRegimeBens(contrato.getSocioRegimeBens())
-                .socioCpf(contrato.getSocioCpf())
-                .socioRg(contrato.getSocioRg())
-                .socioCnh(contrato.getSocioCnh())
-                .socioEmail(contrato.getSocioEmail())
-                .socioTelefone(contrato.getSocioTelefone())
-                .socioEndereco(contrato.getSocioEndereco())
-                // Página 2
-                .compradorNome(contrato.getCompradorNome())
-                .compradorNacionalidade(contrato.getCompradorNacionalidade())
-                .compradorProfissao(contrato.getCompradorProfissao())
-                .compradorEstadoCivil(contrato.getCompradorEstadoCivil())
-                .compradorRegimeBens(contrato.getCompradorRegimeBens())
-                .compradorCpf(contrato.getCompradorCpf())
-                .compradorRg(contrato.getCompradorRg())
-                .compradorCnh(contrato.getCompradorCnh())
-                .compradorEmail(contrato.getCompradorEmail())
-                .compradorTelefone(contrato.getCompradorTelefone())
-                .compradorEndereco(contrato.getCompradorEndereco())
-                .conjugeNome(contrato.getConjugeNome())
-                .conjugeNacionalidade(contrato.getConjugeNacionalidade())
-                .conjugeProfissao(contrato.getConjugeProfissao())
-                .conjugeCpf(contrato.getConjugeCpf())
-                .conjugeRg(contrato.getConjugeRg())
+                .vendedores(vendedorResponses)
+                .compradores(compradorResponses)
                 // Página 3
                 .imovelMatricula(contrato.getImovelMatricula())
                 .imovelLivro(contrato.getImovelLivro())
@@ -293,6 +430,7 @@ public class ContratoService {
                 .veiculoMotor(contrato.getVeiculoMotor())
                 .veiculoRenavam(contrato.getVeiculoRenavam())
                 .veiculoDataEntrega(contrato.getVeiculoDataEntrega())
+                .veiculoKm(contrato.getVeiculoKm())
                 // Página 4
                 .negocioValorTotal(contrato.getNegocioValorTotal())
                 .negocioValorEntrada(contrato.getNegocioValorEntrada())
@@ -304,6 +442,8 @@ public class ContratoService {
                 .negocioValorVeiculoPermuta(contrato.getNegocioValorVeiculoPermuta())
                 .negocioValorFinanciamento(contrato.getNegocioValorFinanciamento())
                 .negocioPrazoPagamento(contrato.getNegocioPrazoPagamento())
+                .negocioDataPrimeiraParcela(contrato.getNegocioDataPrimeiraParcela())
+                .parcelas(parseParcelas(contrato.getNegocioParcelas()))
                 .contaTitular(contrato.getContaTitular())
                 .contaBanco(contrato.getContaBanco())
                 .contaAgencia(contrato.getContaAgencia())
@@ -318,6 +458,52 @@ public class ContratoService {
                 .assinaturaGestor(contrato.getAssinaturaGestor())
                 .createdAt(contrato.getCreatedAt())
                 .updatedAt(contrato.getUpdatedAt())
+                .build();
+    }
+
+    private VendedorResponse toVendedorResponse(ContratoVendedor v) {
+        return VendedorResponse.builder()
+                .id(v.getId())
+                .ordem(v.getOrdem())
+                .nome(v.getNome())
+                .documento(v.getDocumento())
+                .email(v.getEmail())
+                .telefone(v.getTelefone())
+                .endereco(v.getEndereco())
+                .socioNome(v.getSocioNome())
+                .socioCpf(v.getSocioCpf())
+                .socioNacionalidade(v.getSocioNacionalidade())
+                .socioProfissao(v.getSocioProfissao())
+                .socioEstadoCivil(v.getSocioEstadoCivil())
+                .socioRegimeBens(v.getSocioRegimeBens())
+                .socioRg(v.getSocioRg())
+                .socioCnh(v.getSocioCnh())
+                .socioEmail(v.getSocioEmail())
+                .socioTelefone(v.getSocioTelefone())
+                .socioEndereco(v.getSocioEndereco())
+                .build();
+    }
+
+    private CompradorResponse toCompradorResponse(ContratoComprador c) {
+        return CompradorResponse.builder()
+                .id(c.getId())
+                .ordem(c.getOrdem())
+                .nome(c.getNome())
+                .documento(c.getDocumento())
+                .nacionalidade(c.getNacionalidade())
+                .profissao(c.getProfissao())
+                .estadoCivil(c.getEstadoCivil())
+                .regimeBens(c.getRegimeBens())
+                .rg(c.getRg())
+                .cnh(c.getCnh())
+                .email(c.getEmail())
+                .telefone(c.getTelefone())
+                .endereco(c.getEndereco())
+                .conjugeNome(c.getConjugeNome())
+                .conjugeCpf(c.getConjugeCpf())
+                .conjugeNacionalidade(c.getConjugeNacionalidade())
+                .conjugeProfissao(c.getConjugeProfissao())
+                .conjugeRg(c.getConjugeRg())
                 .build();
     }
 }

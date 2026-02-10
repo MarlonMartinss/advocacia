@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 @NoArgsConstructor
@@ -17,45 +18,11 @@ public class ContratoRequest {
     // Controle de página atual
     private Integer paginaAtual;
 
-    // ========== PÁGINA 1: VENDEDOR PESSOA JURÍDICA ==========
-    private String vendedorNome;
-    private String vendedorCnpj;
-    private String vendedorEmail;
-    private String vendedorTelefone;
-    private String vendedorEndereco;
+    // ========== VENDEDORES (lista) ==========
+    private List<VendedorRequest> vendedores;
 
-    // ========== PÁGINA 1: SÓCIO ADMINISTRADOR ==========
-    private String socioNome;
-    private String socioNacionalidade;
-    private String socioProfissao;
-    private String socioEstadoCivil;
-    private String socioRegimeBens;
-    private String socioCpf;
-    private String socioRg;
-    private String socioCnh;
-    private String socioEmail;
-    private String socioTelefone;
-    private String socioEndereco;
-
-    // ========== PÁGINA 2: COMPRADOR ==========
-    private String compradorNome;
-    private String compradorNacionalidade;
-    private String compradorProfissao;
-    private String compradorEstadoCivil;
-    private String compradorRegimeBens;
-    private String compradorCpf;
-    private String compradorRg;
-    private String compradorCnh;
-    private String compradorEmail;
-    private String compradorTelefone;
-    private String compradorEndereco;
-
-    // ========== PÁGINA 2: CÔNJUGE/CONVIVENTE ==========
-    private String conjugeNome;
-    private String conjugeNacionalidade;
-    private String conjugeProfissao;
-    private String conjugeCpf;
-    private String conjugeRg;
+    // ========== COMPRADORES (lista) ==========
+    private List<CompradorRequest> compradores;
 
     // ========== PÁGINA 3: IMÓVEL OBJETO DO NEGÓCIO ==========
     private String imovelMatricula;
@@ -87,6 +54,7 @@ public class ContratoRequest {
     private String veiculoMotor;
     private String veiculoRenavam;
     private LocalDate veiculoDataEntrega;
+    private Integer veiculoKm;
 
     // ========== PÁGINA 4: NEGÓCIO ==========
     private BigDecimal negocioValorTotal;
@@ -99,6 +67,8 @@ public class ContratoRequest {
     private BigDecimal negocioValorVeiculoPermuta;
     private BigDecimal negocioValorFinanciamento;
     private String negocioPrazoPagamento;
+    private LocalDate negocioDataPrimeiraParcela;
+    private List<ParcelaItemDto> parcelas;
 
     // ========== PÁGINA 4: CONTA BANCÁRIA ==========
     private String contaTitular;

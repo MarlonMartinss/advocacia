@@ -12,12 +12,23 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Configuration
 @RequiredArgsConstructor
 public class ApplicationConfig {
 
     private final UserRepository userRepository;
+
+    /** TransactionTemplate com REQUIRES_NEW para persistir fallback de auditoria em transação separada (evita rollback). */
+    @Bean(name = "transactionTemplateRequiresNew")
+    public TransactionTemplate transactionTemplateRequiresNew(PlatformTransactionManager ptm) {
+        TransactionTemplate tt = new TransactionTemplate(ptm);
+        tt.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        return tt;
+    }
 
     @Bean
     public UserDetailsService userDetailsService() {

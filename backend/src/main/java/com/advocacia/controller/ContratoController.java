@@ -1,7 +1,7 @@
 package com.advocacia.controller;
 
-import com.advocacia.dto.ContratoRequest;
-import com.advocacia.dto.ContratoResponse;
+import com.advocacia.dto.*;
+import com.advocacia.service.ContratoAuditService;
 import com.advocacia.service.ContratoService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -16,6 +16,7 @@ import java.util.List;
 public class ContratoController {
 
     private final ContratoService contratoService;
+    private final ContratoAuditService auditService;
 
     @GetMapping
     public ResponseEntity<List<ContratoResponse>> findAll() {
@@ -38,9 +39,24 @@ public class ContratoController {
         return ResponseEntity.ok(contratoService.update(id, request));
     }
 
+    @PutMapping("/{id}/vendedores")
+    public ResponseEntity<ContratoResponse> updateVendedores(@PathVariable Long id, @RequestBody List<VendedorRequest> vendedores) {
+        return ResponseEntity.ok(contratoService.updateVendedores(id, vendedores));
+    }
+
+    @PutMapping("/{id}/compradores")
+    public ResponseEntity<ContratoResponse> updateCompradores(@PathVariable Long id, @RequestBody List<CompradorRequest> compradores) {
+        return ResponseEntity.ok(contratoService.updateCompradores(id, compradores));
+    }
+
     @PostMapping("/{id}/finalizar")
     public ResponseEntity<ContratoResponse> finalizar(@PathVariable Long id) {
         return ResponseEntity.ok(contratoService.finalizar(id));
+    }
+
+    @GetMapping("/{id}/historico")
+    public ResponseEntity<List<ContratoAlteracaoResponse>> getHistorico(@PathVariable Long id) {
+        return ResponseEntity.ok(auditService.getHistorico(id));
     }
 
     @DeleteMapping("/all")

@@ -2,6 +2,8 @@ package com.advocacia.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -9,6 +11,8 @@ import lombok.NoArgsConstructor;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "contratos")
@@ -210,6 +214,9 @@ public class Contrato {
     @Column(name = "veiculo_data_entrega")
     private LocalDate veiculoDataEntrega;
 
+    @Column(name = "veiculo_km")
+    private Integer veiculoKm;
+
     // ========== PÁGINA 4: NEGÓCIO ==========
     @Column(name = "negocio_valor_total", precision = 15, scale = 2)
     private BigDecimal negocioValorTotal;
@@ -240,6 +247,13 @@ public class Contrato {
 
     @Column(name = "negocio_prazo_pagamento", length = 200)
     private String negocioPrazoPagamento;
+
+    @Column(name = "negocio_data_primeira_parcela")
+    private LocalDate negocioDataPrimeiraParcela;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "negocio_parcelas", columnDefinition = "jsonb")
+    private String negocioParcelas;
 
     // ========== PÁGINA 4: CONTA BANCÁRIA ==========
     @Column(name = "conta_titular", length = 200)
@@ -279,6 +293,19 @@ public class Contrato {
 
     @Column(name = "assinatura_gestor", length = 200)
     private String assinaturaGestor;
+
+    // ========== VENDEDORES E COMPRADORES (N:1) ==========
+    @OneToMany(mappedBy = "contrato", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("ordem ASC")
+    @org.hibernate.annotations.BatchSize(size = 20)
+    @Builder.Default
+    private List<ContratoVendedor> vendedores = new ArrayList<>();
+
+    @OneToMany(mappedBy = "contrato", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("ordem ASC")
+    @org.hibernate.annotations.BatchSize(size = 20)
+    @Builder.Default
+    private List<ContratoComprador> compradores = new ArrayList<>();
 
     // ========== AUDITORIA ==========
     @Column(name = "created_at", nullable = false, updatable = false)

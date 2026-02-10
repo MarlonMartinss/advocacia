@@ -5,48 +5,59 @@ import { environment } from '../../environments/environment';
 
 export type ContratoStatus = 'DRAFT' | 'FINAL';
 
-export interface ContratoRequest {
-  paginaAtual?: number;
+export interface ParcelaItem {
+  numero: number;
+  vencimento: string; // ISO date (YYYY-MM-DD)
+  valor: number;
+}
 
-  // Página 1: Vendedor PJ
-  vendedorNome?: string;
-  vendedorCnpj?: string;
-  vendedorEmail?: string;
-  vendedorTelefone?: string;
-  vendedorEndereco?: string;
-
-  // Página 1: Sócio Administrador
+export interface VendedorData {
+  id?: number;
+  ordem?: number;
+  nome?: string;
+  documento?: string;
+  email?: string;
+  telefone?: string;
+  endereco?: string;
   socioNome?: string;
+  socioCpf?: string;
   socioNacionalidade?: string;
   socioProfissao?: string;
   socioEstadoCivil?: string;
   socioRegimeBens?: string;
-  socioCpf?: string;
   socioRg?: string;
   socioCnh?: string;
   socioEmail?: string;
   socioTelefone?: string;
   socioEndereco?: string;
+}
 
-  // Página 2: Comprador
-  compradorNome?: string;
-  compradorNacionalidade?: string;
-  compradorProfissao?: string;
-  compradorEstadoCivil?: string;
-  compradorRegimeBens?: string;
-  compradorCpf?: string;
-  compradorRg?: string;
-  compradorCnh?: string;
-  compradorEmail?: string;
-  compradorTelefone?: string;
-  compradorEndereco?: string;
-
-  // Página 2: Cônjuge
+export interface CompradorData {
+  id?: number;
+  ordem?: number;
+  nome?: string;
+  documento?: string;
+  nacionalidade?: string;
+  profissao?: string;
+  estadoCivil?: string;
+  regimeBens?: string;
+  rg?: string;
+  cnh?: string;
+  email?: string;
+  telefone?: string;
+  endereco?: string;
   conjugeNome?: string;
+  conjugeCpf?: string;
   conjugeNacionalidade?: string;
   conjugeProfissao?: string;
-  conjugeCpf?: string;
   conjugeRg?: string;
+}
+
+export interface ContratoRequest {
+  paginaAtual?: number;
+
+  vendedores?: VendedorData[];
+  compradores?: CompradorData[];
 
   // Página 3: Imóvel Objeto
   imovelMatricula?: string;
@@ -78,6 +89,7 @@ export interface ContratoRequest {
   veiculoMotor?: string;
   veiculoRenavam?: string;
   veiculoDataEntrega?: string;
+  veiculoKm?: number;
 
   // Página 4: Negócio
   negocioValorTotal?: number;
@@ -90,6 +102,8 @@ export interface ContratoRequest {
   negocioValorVeiculoPermuta?: number;
   negocioValorFinanciamento?: number;
   negocioPrazoPagamento?: string;
+  negocioDataPrimeiraParcela?: string;
+  parcelas?: ParcelaItem[];
 
   // Página 4: Conta Bancária
   contaTitular?: string;
@@ -127,6 +141,26 @@ export interface ContratoAnexo {
   createdAt: string;
 }
 
+export interface FieldChange {
+  path: string;
+  oldValue: any;
+  newValue: any;
+  /** Rótulo amigável (ex.: "Vendedor - Nome") */
+  label?: string;
+  /** Valor antigo formatado para exibição (ex.: "Rascunho") */
+  displayOld?: string;
+  /** Valor novo formatado para exibição */
+  displayNew?: string;
+}
+
+export interface ContratoAlteracao {
+  id: number;
+  contratoId: number;
+  changedAt: string;
+  username: string;
+  changes: FieldChange[];
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -151,12 +185,26 @@ export class ContratoService {
     return this.http.put<ContratoResponse>(`${this.apiUrl}/${id}`, data);
   }
 
+  updateVendedores(id: number, vendedores: VendedorData[]): Observable<ContratoResponse> {
+    return this.http.put<ContratoResponse>(`${this.apiUrl}/${id}/vendedores`, vendedores);
+  }
+
+  updateCompradores(id: number, compradores: CompradorData[]): Observable<ContratoResponse> {
+    return this.http.put<ContratoResponse>(`${this.apiUrl}/${id}/compradores`, compradores);
+  }
+
   finalizar(id: number): Observable<ContratoResponse> {
     return this.http.post<ContratoResponse>(`${this.apiUrl}/${id}/finalizar`, {});
   }
 
   delete(id: number): Observable<void> {
     return this.http.delete<void>(`${this.apiUrl}/${id}`);
+  }
+
+  // ========== HISTÓRICO ==========
+
+  getHistorico(id: number): Observable<ContratoAlteracao[]> {
+    return this.http.get<ContratoAlteracao[]>(`${this.apiUrl}/${id}/historico`);
   }
 
   // ========== ANEXOS ==========
